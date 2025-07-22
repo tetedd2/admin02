@@ -9,7 +9,7 @@
       padding: 20px;
       background: #f7f7f7;
       color: #2d3436;
-      max-width: 600px
+      max-width: 600px;
       margin: auto;
     }
     h1, h2 {
@@ -49,16 +49,16 @@
   <h2>❌ ยังไม่จ่าย</h2>
   <ul id="unpaidList" class="unpaid"></ul>
 
-  <!-- Firebase + Script -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
     import { firebaseConfig } from "./firebase-config.js";
 
+    // เริ่มต้น Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    const allUsers = Array.from({ length: 30 }, (_, i) => `user${(i + 1).toString().padStart(2, '0')}`);
+    // วันที่วันนี้ในรูปแบบ YYYY-MM-DD
     const today = new Date().toISOString().slice(0, 10);
     document.getElementById("todayDate").textContent = today;
 
@@ -66,20 +66,41 @@
     const unpaidList = document.getElementById("unpaidList");
 
     async function checkPayments() {
-      const q = query(collection(db, "payments"), where("date", "==", today));
-      const snapshot = await getDocs(q);
-      const paidUsers = new Set(snapshot.docs.map(doc => doc.data().email?.split("@")[0] || doc.data().userId || "unknown"));
+      try {
+        // 1. ดึงชื่อเล่นทั้งหมดจาก collection "users"
+        const userSnapshot = await getDocs(collection(db, "users"));
+        let allUsers = userSnapshot.docs
+          .map(doc => doc.data().nickname)
+          .filter(n => n && typeof n === 'string');
 
-      allUsers.forEach(user => {
-        const li = document.createElement("li");
-        li.textContent = user;
+        // เรียงชื่อเล่นตามตัวอักษร
+        allUsers.sort((a, b) => a.localeCompare(b, 'th'));
 
-        if (paidUsers.has(user)) {
-          paidList.appendChild(li);
-        } else {
-          unpaidList.appendChild(li);
-        }
-      });
+        // 2. ดึงรายการจ่ายเงินของวันนี้
+        const paymentSnapshot = await getDocs(
+          query(collection(db, "payments"), where("date", "==", today))
+        );
+
+        const paidNicknames = new Set(
+          paymentSnapshot.docs
+            .map(doc => doc.data().nickname)
+            .filter(n => n && allUsers.includes(n))
+        );
+
+        // 3. แสดงผลใน paid และ unpaid
+        allUsers.forEach(nickname => {
+          const li = document.createElement("li");
+          li.textContent = nickname;
+
+          if (paidNicknames.has(nickname)) {
+            paidList.appendChild(li);
+          } else {
+            unpaidList.appendChild(li);
+          }
+        });
+      } catch (error) {
+        console.error("เกิดข้อผิดพลาดในการโหลดข้อมูล:", error);
+      }
     }
 
     checkPayments();
